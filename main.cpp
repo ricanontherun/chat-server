@@ -1,6 +1,8 @@
 #include <iostream>
 #include <sstream>
-#include <unistd.h>
+#include <functional>
+#include <string.h>
+#include <map>
 
 #include "zmq.hpp"
 #include "ZMQHelpers.h"
@@ -9,13 +11,16 @@
 
 int main()
 {
+  std::map<std::size_t, std::string> connection_map;
+  std::hash<std::string> uname_hash;
+
   zmq::context_t context(1);
 
   // Socket which listens for messages.
   zmq::socket_t message_receiver(context, ZMQ_PULL);
 
   // Socket which listens for new client connections.
-  zmq::socket_t client_connection(context, ZMQ_PULL);
+  zmq::socket_t client_connection(context, ZMQ_REP);
 
   zmq::socket_t publish(context, ZMQ_PUB);
 
@@ -48,10 +53,8 @@ int main()
       message_receiver.recv(&incoming_message);
       zmq_extract_message(incoming_message, incoming_message_string);
 
+      zmq_pack_message(outgoing_message, "MESSAGE " + incoming_message_string);
 
-      std::cout << "Received: " << incoming_message_string << "\n";
-
-      incoming_message.copy(&outgoing_message);
       publish.send(outgoing_message);
     }
 
@@ -66,19 +69,16 @@ int main()
 
       ss >> key >> connection_username;
 
-      if ( key != CLIENT_CONNECT_KEY ) {
+      if ( strcmp(key.c_str(), CLIENT_CONNECT_KEY) != 0 ) {
         continue;
+      } else {
+        std::stringstream hash_stream;
+        std::size_t hash = uname_hash(connection_username);
+        hash_stream << hash;
+
+        zmq_pack_message(outgoing_message, "CLIENT_TOKEN " + hash_stream.str());
+        client_connection.send(outgoing_message);
       }
-
-      std::string welcome_message = "MESSAGE " + connection_username + " has connected.";
-      zmq_pack_message(outgoing_message, welcome_message);
-
-      // TODO: REMOVE THIS AND LEARN HOW TO SYNC THE PUB/SUBS.
-      sleep(1);
-
-      publish.send(outgoing_message);
-
-      std::cout << "sent!\n";
     }
   }
 
