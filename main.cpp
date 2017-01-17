@@ -4,6 +4,7 @@
 #include <string.h>
 #include <map>
 
+#include "json.hpp"
 #include "zmq.hpp"
 #include "ZMQHelpers.h"
 
@@ -47,8 +48,6 @@ int main()
   while (true) {
     zmq::poll(&items[0], 2, -1);
 
-    // Someone has sent a message.
-    // We receive it and publish it to the channel.
     if ( items[0].revents & ZMQ_POLLIN ) {
       message_receiver.recv(&incoming_message);
       zmq_extract_message(incoming_message, incoming_message_string);
@@ -64,19 +63,35 @@ int main()
       std::string connection_username;
       client_connection.recv(&incoming_message); // We HAVE to receive the message.
 
+      nlohmann::json response;
+      response["success"] = true;
+
       zmq_extract_message(incoming_message, connection_username);
-      std::stringstream ss(connection_username);
 
-      ss >> key >> connection_username;
+      try {
+        auto json = nlohmann::json::parse(connection_username);
 
-      if ( strcmp(key.c_str(), CLIENT_CONNECT_KEY) != 0 ) {
-        continue;
-      } else {
-        std::stringstream hash_stream;
-        std::size_t hash = uname_hash(connection_username);
-        hash_stream << hash;
+        // Check and grab the username field.
+        if ( json.count("username") == 0 ) {
+          response["success"] = false;
+          response["error"] = "Missing 'username' field";
+        } else {
+          std::string username = json["username"];
+          std::size_t hash = uname_hash(username);
 
-        zmq_pack_message(outgoing_message, "CLIENT_TOKEN " + hash_stream.str());
+          response["token"] = hash;
+          connection_map[hash] = username;
+        }
+
+        zmq_pack_message(outgoing_message, response.dump());
+        client_connection.send(outgoing_message);
+
+      } catch ( std::invalid_argument & e) {
+        response["success"] = false;
+        response["error"] = "Failed to parse JSON";
+
+        zmq_pack_message(outgoing_message, response.dump());
+
         client_connection.send(outgoing_message);
       }
     }
