@@ -1,6 +1,8 @@
 #ifndef ZMQ_HELPERS
 #define ZMQ_HELPERS
 
+#include "json.hpp"
+
 /**
  * Extract a null terminated string from a zmq message.
  *
@@ -17,6 +19,29 @@ void zmq_extract_message(const zmq::message_t &message, std::string &buffer) {
   buffer.assign(buf, size);
 
   free(buf);
+}
+
+/**
+ * Extract a json string from a zmq message.
+ *
+ * @param message
+ * @param json
+ * @return
+ */
+bool zmq_extract_json(const zmq::message_t & message, nlohmann::json & json)
+{
+  std::string message_buffer;
+
+  zmq_extract_message(message, message_buffer);
+
+  try {
+
+    json = nlohmann::json::parse(message_buffer);
+
+    return true;
+  } catch (std::invalid_argument & e) {
+    return false;
+  }
 }
 
 void zmq_pack_message(zmq::message_t & message, std::string data)
