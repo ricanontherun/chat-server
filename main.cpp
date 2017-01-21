@@ -1,14 +1,11 @@
 #include <iostream>
 #include <sstream>
 #include <functional>
-#include <string.h>
 #include <map>
 
 #include "json.hpp"
 #include "zmq.hpp"
 #include "ZMQHelpers.h"
-
-#define CLIENT_CONNECT_KEY "CLIENT_CONNECT"
 
 int main() {
   // We're using an ordered map for O(log(n)) user lookups.
